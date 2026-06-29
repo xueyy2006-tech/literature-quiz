@@ -87,9 +87,9 @@ body {
 .works-column, .authors-column, .chars-column {
     display: flex; flex-direction: column; gap: 8px; z-index: 2;
 }
-.works-column { flex: 0 0 26%; }
-.authors-column { flex: 0 0 21%; }
-.chars-column { flex: 0 0 47%; }
+.authors-column { flex: 0 0 22%; }
+.works-column   { flex: 0 0 28%; }
+.chars-column   { flex: 0 0 44%; }
 
 /* ── Items ── */
 .work-item, .author-item, .char-item {
@@ -103,10 +103,11 @@ body {
 }
 .work-item:active, .author-item:active, .char-item:active { transform: scale(0.98); }
 
-/* Work: right-side connector */
-.work-item { padding-right: 28px; }
-/* Author & Char: left-side connector */
-.author-item { padding-left: 28px; }
+/* Work: dots on BOTH edges (central hub) */
+.work-item { padding-left: 28px; padding-right: 28px; }
+/* Author: dot on RIGHT edge → connects to work */
+.author-item { padding-right: 28px; }
+/* Char: dot on LEFT edge ← connected from work */
 .char-item { padding-left: 28px; }
 
 /* Selected */
@@ -149,22 +150,12 @@ body {
     border: 2.5px solid #ccc; background: #fff;
     transform: translateY(-50%); transition: all 0.25s ease; z-index: 3;
 }
-/* Work dots: two on the right edge */
-.work-item .dot-author { right: -6px; top: 30%; }
-.work-item .dot-char   { right: -6px; top: 70%; }
-.work-item .dot-author::after {
-    content: 'A'; position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
-    font-size: 7px; color: #b8860b; font-weight: 700; opacity: 0; transition: opacity 0.2s;
-}
-.work-item .dot-char::after {
-    content: 'C'; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%);
-    font-size: 7px; color: #4a7eb5; font-weight: 700; opacity: 0; transition: opacity 0.2s;
-}
-.work-item.connected .dot-author::after,
-.work-item.connected .dot-char.connected::after { opacity: 1; }
-
-/* Author & Char dots: on left edge */
-.author-item .connector-dot { left: -6px; top: 50%; }
+/* Work: author-dot on LEFT edge, char-dot on RIGHT edge */
+.work-item .dot-author { left: -6px; top: 50%; }
+.work-item .dot-char   { right: -6px; top: 50%; }
+/* Author: dot on RIGHT edge → work */
+.author-item .connector-dot { right: -6px; top: 50%; }
+/* Char: dot on LEFT edge ← work */
 .char-item .connector-dot { left: -6px; top: 50%; }
 
 .connector-dot.connected { background: #b8860b; border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,0.15); }
@@ -207,9 +198,9 @@ body {
     .header h1 { font-size: 1.4rem; }
     .quiz-container { padding: 14px 6px 12px; }
     .matching-area { gap: 6px; min-height: 300px; }
-    .works-column { flex: 0 0 28%; }
-    .authors-column { flex: 0 0 22%; }
-    .chars-column { flex: 0 0 44%; }
+    .authors-column { flex: 0 0 24%; }
+    .works-column   { flex: 0 0 28%; }
+    .chars-column   { flex: 0 0 42%; }
     .work-item, .author-item, .char-item { padding: 6px 6px; min-height: 34px; }
     .work-item { padding-right: 22px; }
     .author-item, .char-item { padding-left: 22px; }
@@ -227,7 +218,7 @@ body {
 
 <div class="header">
     <h1>中国现当代文学 · 连线题</h1>
-    <p class="subtitle">点击篇名 → 点击作者 → 点击重要人物，完成三条连线</p>
+    <p class="subtitle">点击作品 → 分别连线作者和重要人物</p>
 </div>
 
 <div class="pinyin-toggle-wrap" id="pinyinToggleWrap">
@@ -246,21 +237,21 @@ body {
 
 <div class="quiz-container">
     <div class="column-labels">
-        <span class="column-label">📖 篇名</span>
         <span class="column-label">✍️ 作者</span>
+        <span class="column-label">📖 篇名</span>
         <span class="column-label">👥 重要人物</span>
     </div>
 
     <div class="matching-area" id="matchingArea">
         <svg class="connection-svg" id="connectionSvg"></svg>
-        <div class="works-column" id="worksColumn"></div>
         <div class="authors-column" id="authorsColumn"></div>
+        <div class="works-column" id="worksColumn"></div>
         <div class="chars-column" id="charsColumn"></div>
     </div>
 
     <div class="legend">
-        <span><span class="line-sample line-author"></span> 作品→作者</span>
-        <span><span class="line-sample line-char"></span> 作品→人物</span>
+        <span><span class="line-sample line-author"></span> 作者←→作品</span>
+        <span><span class="line-sample line-char"></span> 作品←→人物</span>
     </div>
 
     <div class="controls">
@@ -501,9 +492,9 @@ body {
                 else cls.push('result-partial');
             }
             return `<div class="work-item ${cls.join(' ')}" data-index="${i}">
+                <div class="connector-dot dot-author ${connAuthor(i)?'connected '+dotAuthorCls(i):''}"></div>
                 <span class="item-number">${i+1}</span>
                 <span class="item-text">《${escapeHtml(w.work)}》</span>
-                <div class="connector-dot dot-author ${connAuthor(i)?'connected '+dotAuthorCls(i):''}"></div>
                 <div class="connector-dot dot-char ${connChars(i)?'char-connected '+dotCharCls(i):''}"></div>
             </div>`;
         }).join('');
@@ -515,9 +506,9 @@ body {
             let cls = isConn ? 'connected' : '';
             if (state.checked) cls += ' ' + authorResultCls(a);
             return `<div class="author-item ${cls}" data-author="${escapeHtml(a)}">
-                <div class="connector-dot ${isConn?'connected '+authorDotCls2(a):''}"></div>
                 <span class="item-label">${String.fromCharCode(65+i)}</span>
                 <span class="item-text">${escapeHtml(displayName)}</span>
+                <div class="connector-dot ${isConn?'connected '+authorDotCls2(a):''}"></div>
             </div>`;
         }).join('');
 
@@ -616,14 +607,14 @@ body {
             const workItem = worksColumn.querySelector(`.work-item[data-index="${wi}"]`);
             if (!workItem) continue;
 
-            // Author line
+            // Author line: author (right dot) → work (left dot)
             if (conn.author) {
                 const authorItem = authorsColumn.querySelector(`.author-item[data-author="${CSS.escape(conn.author)}"]`);
                 if (authorItem) {
-                    const wDot = workItem.querySelector('.dot-author');
                     const aDot = authorItem.querySelector('.connector-dot');
-                    if (wDot && aDot) {
-                        const pts = calcPoints(wDot, aDot, containerRect, offX, offY);
+                    const wDot = workItem.querySelector('.dot-author');
+                    if (aDot && wDot) {
+                        const pts = calcPoints(aDot, wDot, containerRect, offX, offY);
                         let cls = 'conn-author-default';
                         if (state.checked) {
                             cls = conn.author === state.currentWorks[wi].author ? 'conn-author-correct' : 'conn-author-incorrect';
@@ -633,7 +624,7 @@ body {
                 }
             }
 
-            // Character line
+            // Character line: work (right dot) → character (left dot)
             if (conn.chars) {
                 const charItem = charsColumn.querySelector(`.char-item[data-chars="${CSS.escape(conn.chars)}"]`);
                 if (charItem) {
