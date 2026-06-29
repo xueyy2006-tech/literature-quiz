@@ -36,6 +36,68 @@ body {
     font-weight: 400;
 }
 
+/* ── Pinyin Toggle ── */
+.pinyin-toggle-wrap {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: white;
+    padding: 6px 12px;
+    border-radius: 22px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    font-size: 0.82rem;
+    font-weight: 600;
+    user-select: none;
+}
+.pinyin-toggle-wrap .toggle-label {
+    color: #666;
+    white-space: nowrap;
+}
+.pinyin-toggle-wrap .toggle-label.active {
+    color: #b22222;
+    transition: color 0.2s;
+}
+.pinyin-toggle {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+}
+.pinyin-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.pinyin-toggle .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #ccc;
+    border-radius: 24px;
+    transition: 0.25s;
+}
+.pinyin-toggle .slider::before {
+    content: '';
+    position: absolute;
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: 0.25s;
+}
+.pinyin-toggle input:checked + .slider {
+    background: #b22222;
+}
+.pinyin-toggle input:checked + .slider::before {
+    transform: translateX(20px);
+}
+
 /* ── Stats Bar ── */
 .stats-bar {
     display: flex;
@@ -354,6 +416,15 @@ body {
     <p class="subtitle">点击篇名 → 再点击作者，完成连线匹配</p>
 </div>
 
+<div class="pinyin-toggle-wrap" id="pinyinToggleWrap">
+    <span class="toggle-label" id="toggleLabelOff">普通模式</span>
+    <label class="pinyin-toggle">
+        <input type="checkbox" id="pinyinToggle">
+        <span class="slider"></span>
+    </label>
+    <span class="toggle-label" id="toggleLabelOn">拼音模式</span>
+</div>
+
 <div class="stats-bar">
     <div class="stat-item">📝 本轮 <span id="round-num">1</span></div>
     <div class="stat-item">✅ 累计正确 <span id="total-correct">0</span></div>
@@ -452,6 +523,41 @@ body {
     // ─────────────────────────────────────
     // 全局状态
     // ─────────────────────────────────────
+    // ─────────────────────────────────────
+    // 作者拼音对照表
+    // ─────────────────────────────────────
+    const authorPinyin = {
+        "鲁迅": "Lǔ Xùn",
+        "郁达夫": "Yù Dáfū",
+        "许地山": "Xǔ Dìshān",
+        "凌叔华": "Líng Shūhuá",
+        "叶圣陶": "Yè Shèngtáo",
+        "废名": "Fèi Míng",
+        "台静农": "Tái Jìngnóng",
+        "丁玲": "Dīng Líng",
+        "柔石": "Róu Shí",
+        "茅盾": "Máo Dùn",
+        "穆时英": "Mù Shíyīng",
+        "施蛰存": "Shī Zhécún",
+        "沈从文": "Shěn Cóngwén",
+        "艾芜": "Ài Wú",
+        "林徽因": "Lín Huīyīn",
+        "吴组缃": "Wú Zǔxiāng",
+        "老舍": "Lǎo Shě",
+        "张天翼": "Zhāng Tiānyì",
+        "沙汀": "Shā Tīng",
+        "萧红": "Xiāo Hóng",
+        "孔厥": "Kǒng Jué",
+        "骆宾基": "Luò Bīnjī",
+        "赵树理": "Zhào Shùlǐ",
+        "张爱玲": "Zhāng Àilíng",
+        "孙犁": "Sūn Lí",
+        "师陀": "Shī Tuó",
+    };
+
+    // ─────────────────────────────────────
+    // 全局状态
+    // ─────────────────────────────────────
     const state = {
         currentWorks: [],       // 本轮选中的 7 道题 [{work, author}]
         currentAuthors: [],     // 本轮出现的唯一作者列表
@@ -461,6 +567,7 @@ body {
         totalRounds: 0,
         totalCorrect: 0,
         roundCorrect: 0,
+        pinyinMode: false,      // 拼音模式开关
     };
 
     // ─────────────────────────────────────
@@ -476,6 +583,9 @@ body {
     const scoreToast = document.getElementById('scoreToast');
     const roundNumEl = document.getElementById('round-num');
     const totalCorrectEl = document.getElementById('total-correct');
+    const pinyinToggle = document.getElementById('pinyinToggle');
+    const toggleLabelOff = document.getElementById('toggleLabelOff');
+    const toggleLabelOn = document.getElementById('toggleLabelOn');
 
     // ─────────────────────────────────────
     // 工具函数
@@ -547,6 +657,7 @@ body {
         authorsColumn.innerHTML = state.currentAuthors.map((a, i) => {
             const isConnected = Object.values(state.connections).includes(a);
             const cls = isConnected ? 'connected' : '';
+            const displayName = state.pinyinMode ? (authorPinyin[a] || a) : a;
             // 检查这个作者相关的连线是否正确（仅 checked 模式下高亮错误）
             let resultCls = '';
             if (state.checked) {
@@ -564,7 +675,7 @@ body {
             <div class="author-item ${cls} ${resultCls}"
                  data-author="${escapeHtml(a)}">
                 <span class="item-label">${String.fromCharCode(65 + i)}</span>
-                <span class="item-text">${escapeHtml(a)}</span>
+                <span class="item-text">${escapeHtml(displayName)}</span>
                 <div class="connector-dot ${isConnected ? 'connected' : ''}
                      ${getAuthorDotResultClass(a)}"></div>
             </div>`;
@@ -820,6 +931,15 @@ body {
 
     btnReset.addEventListener('click', generateRound);
     btnClear.addEventListener('click', clearLines);
+
+    // 拼音模式切换
+    pinyinToggle.addEventListener('change', function() {
+        state.pinyinMode = this.checked;
+        toggleLabelOff.style.color = this.checked ? '#666' : '#b22222';
+        toggleLabelOn.style.color = this.checked ? '#b22222' : '#666';
+        renderColumns();
+        requestAnimationFrame(updateLines);
+    });
 
     // ─────────────────────────────────────
     // 键盘快捷键
