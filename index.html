@@ -112,6 +112,8 @@ body {
 
 /* Selected */
 .work-item.selected { border-color: #b22222; background: #fef5f5; box-shadow: 0 0 0 3px rgba(178,34,34,0.1); }
+.author-item.selected { border-color: #b22222; background: #fef5f5; box-shadow: 0 0 0 3px rgba(178,34,34,0.1); }
+.char-item.selected { border-color: #b22222; background: #fef5f5; box-shadow: 0 0 0 3px rgba(178,34,34,0.1); }
 .work-item.connected { border-color: #b8860b; background: #fffdf5; }
 .author-item.connected { border-color: #b8860b; background: #fffdf5; }
 .char-item.connected { border-color: #4a7eb5; background: #f5f8fc; }
@@ -408,7 +410,7 @@ body {
         currentAuthors: [],
         currentChars: [],
         connections: {},    // { workIndex: { author: "鲁迅", chars: "..." } }
-        selectedWork: null,
+        sel: null,           // { type: 'work', index } | { type: 'author', name } | { type: 'char', chars }
         checked: false,
         totalRounds: 0,
         totalCorrect: 0,
@@ -456,7 +458,7 @@ body {
         state.currentAuthors = shuffle(authorSet);
         state.currentChars = shuffle(charSet);
         state.connections = {};
-        state.selectedWork = null;
+        state.sel = null;
         state.checked = false;
         state.roundCorrect = 0;
 
@@ -474,14 +476,25 @@ body {
     function connChars(i) { return state.connections[i]?.chars; }
     function connFull(i) { return connAuthor(i) && connChars(i); }
 
+    // 辅助：建立一对连接
+    function doConnect(wi, type, value) {
+        if (!state.connections[wi]) state.connections[wi] = {};
+        state.connections[wi][type] = value;
+    }
+
+    // 辅助：断开某 work 的全部连接
+    function doDisconnect(wi) {
+        delete state.connections[wi];
+    }
+
     // ─────────────────────────────────────
     // 渲染三列
     // ─────────────────────────────────────
     function renderColumns() {
-        // 左列：篇名
+        // 中列：篇名
         worksColumn.innerHTML = state.currentWorks.map((w, i) => {
             const cls = [];
-            if (state.selectedWork === i) cls.push('selected');
+            if (state.sel && state.sel.type === 'work' && state.sel.index === i) cls.push('selected');
             if (connAuthor(i) || connChars(i)) cls.push('connected');
             if (state.checked) {
                 const aOk = connAuthor(i) === w.author;
@@ -499,11 +512,12 @@ body {
             </div>`;
         }).join('');
 
-        // 中列：作者
+        // 左列：作者
         authorsColumn.innerHTML = state.currentAuthors.map((a, i) => {
             const isConn = Object.values(state.connections).some(c => c.author === a);
             const displayName = state.pinyinMode ? (authorPinyin[a] || a) : a;
             let cls = isConn ? 'connected' : '';
+            if (state.sel && state.sel.type === 'author' && state.sel.name === a) cls += ' selected';
             if (state.checked) cls += ' ' + authorResultCls(a);
             return `<div class="author-item ${cls}" data-author="${escapeHtml(a)}">
                 <span class="item-label">${String.fromCharCode(65+i)}</span>
@@ -517,6 +531,7 @@ body {
             const isConn = Object.values(state.connections).some(conn => conn.chars === c);
             const displayChars = state.pinyinMode ? toPinyin(c) : c;
             let cls = isConn ? 'connected' : '';
+            if (state.sel && state.sel.type === 'char' && state.sel.chars === c) cls += ' selected';
             if (state.checked) cls += ' ' + charResultCls(c);
             return `<div class="char-item ${cls}" data-chars="${escapeHtml(c)}" title="${escapeHtml(displayChars)}">
                 <div class="connector-dot ${isConn?'char-connected '+charDotCls2(c):''}"></div>
@@ -673,51 +688,56 @@ body {
         const charItem = e.target.closest('.char-item');
 
         if (workItem) {
-            handleWorkClick(parseInt(workItem.dataset.index));
-        } else if (authorItem && state.selectedWork !== null) {
-            handleTargetClick('author', authorItem.dataset.author);
-        } else if (charItem && state.selectedWork !== null) {
-            handleTargetClick('chars', charItem.dataset.chars);
+            const wi = parseInt(workItem.dataset.index);
+            if (state.sel && state.sel.type === 'author') {
+                // 已选中作者 → 连接到此作品
+                doConnect(wi, 'author', state.sel.name);
+                state.sel = null;
+            } else if (state.sel && state.sel.type === 'char') {
+                // 已选中人物 → 连接到此作品
+                doConnect(wi, 'chars', state.sel.chars);
+                state.sel = null;
+            } else if (state.sel && state.sel.type === 'work' && state.sel.index === wi) {
+                // 再次点击同一作品 → 断开（如果有连线）或取消选中
+                if (connAuthor(wi) || connChars(wi)) {
+                    doDisconnect(wi);
+                }
+                state.sel = null;
+            } else {
+                // 选中此作品
+                state.sel = { type: 'work', index: wi };
+            }
+        } else if (authorItem) {
+            const name = authorItem.dataset.author;
+            if (state.sel && state.sel.type === 'work') {
+                // 已选中作品 → 连接此作者
+                doConnect(state.sel.index, 'author', name);
+                state.sel = null;
+            } else if (state.sel && state.sel.type === 'author' && state.sel.name === name) {
+                // 再次点击同一作者 → 取消选中
+                state.sel = null;
+            } else {
+                // 选中此作者
+                state.sel = { type: 'author', name: name };
+            }
+        } else if (charItem) {
+            const chars = charItem.dataset.chars;
+            if (state.sel && state.sel.type === 'work') {
+                // 已选中作品 → 连接此人物
+                doConnect(state.sel.index, 'chars', chars);
+                state.sel = null;
+            } else if (state.sel && state.sel.type === 'char' && state.sel.chars === chars) {
+                // 再次点击同一人物 → 取消选中
+                state.sel = null;
+            } else {
+                // 选中此人物
+                state.sel = { type: 'char', chars: chars };
+            }
         }
+
+        renderColumns();
+        updateLines();
     });
-
-    function handleWorkClick(index) {
-        // 如果已完全连线，点击 = 断开
-        if (connFull(index)) {
-            delete state.connections[index];
-            state.selectedWork = null;
-            renderColumns();
-            updateLines();
-            return;
-        }
-        // 如果部分连线，点击 = 选中以继续连线
-        if (connAuthor(index) || connChars(index)) {
-            state.selectedWork = index;
-            renderColumns();
-            updateLines();
-            return;
-        }
-        // 否则：选中 / 取消选中
-        state.selectedWork = (state.selectedWork === index) ? null : index;
-        renderColumns();
-        updateLines();
-    }
-
-    function handleTargetClick(type, value) {
-        if (state.selectedWork === null) return;
-        const wi = state.selectedWork;
-
-        if (!state.connections[wi]) state.connections[wi] = {};
-        state.connections[wi][type] = value;
-
-        // 如果两种连接都完成了，自动取消选中
-        if (connFull(wi)) {
-            state.selectedWork = null;
-        }
-
-        renderColumns();
-        updateLines();
-    }
 
     // ─────────────────────────────────────
     // 提交答案
@@ -777,7 +797,7 @@ body {
     // ─────────────────────────────────────
     function clearLines() {
         state.connections = {};
-        state.selectedWork = null;
+        state.sel = null;
         state.checked = false;
         state.roundCorrect = 0;
         renderColumns();
