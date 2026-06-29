@@ -275,6 +275,7 @@ body {
     中国现当代文学连线复习工具 · 共收录 90 篇作品，50+ 位作者
 </div>
 
+<script src="https://unpkg.com/pinyin-pro/dist/index.js"></script>
 <script>
 (function() {
     // ─────────────────────────────────────
@@ -447,6 +448,10 @@ body {
     // ─────────────────────────────────────
     function shuffle(arr) { const a = arr.slice(); for (let i = a.length-1; i>0; i--) { const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
     function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
+    function toPinyin(text) {
+        if (!text || typeof pinyinPro === 'undefined') return text;
+        return pinyinPro.pinyin(text, { toneType: 'symbol' });
+    }
 
     // ─────────────────────────────────────
     // 出题
@@ -519,12 +524,13 @@ body {
         // 右列：重要人物
         charsColumn.innerHTML = state.currentChars.map((c, i) => {
             const isConn = Object.values(state.connections).some(conn => conn.chars === c);
+            const displayChars = state.pinyinMode ? toPinyin(c) : c;
             let cls = isConn ? 'connected' : '';
             if (state.checked) cls += ' ' + charResultCls(c);
-            return `<div class="char-item ${cls}" data-chars="${escapeHtml(c)}" title="${escapeHtml(c)}">
+            return `<div class="char-item ${cls}" data-chars="${escapeHtml(c)}" title="${escapeHtml(displayChars)}">
                 <div class="connector-dot ${isConn?'char-connected '+charDotCls2(c):''}"></div>
                 <span class="item-label">${String.fromCharCode(49+i)}</span>
-                <span class="item-text">${escapeHtml(c)}</span>
+                <span class="item-text">${escapeHtml(displayChars)}</span>
             </div>`;
         }).join('');
     }
